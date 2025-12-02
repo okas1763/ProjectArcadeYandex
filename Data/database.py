@@ -122,6 +122,3 @@ class Player:
 
     def __str__(self):
         return f" Your specifications, Damage {self.damag}: HP={self.hp}, Speed={self.speed}"
-
-
-

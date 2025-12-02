@@ -2,11 +2,11 @@
     "BOSS": {
         "HP": 100,
         "SPEED": 0,
-        "NAME": "Колбасный глаз"
+        "NAME": "МАША"
     },
     "PLAYER": {
         "HP": 100,
-        "SPEED": 3,
-        "DAMAG": 4
+        "SPEED": 10,
+        "DAMAG": 10
     }
 }
