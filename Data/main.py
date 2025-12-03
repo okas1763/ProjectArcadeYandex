@@ -134,71 +134,71 @@ class Units:
 class Atacs:
     def __init__(self, width=800, height=800, start_x=None, start_y=None,
                  end_x=None, end_y=None, color=arcade.color.GOLD,
-                 line_width=3, speed=10, damage=20, max_distance=400):
-        """
-        start_x, start_y: начальная точка атаки (от босса)
-        end_x, end_y: точка направления (позиция игрока)
-        speed: скорость движения луча
-        max_distance: максимальная дистанция до границы экрана
-        """
+                 line_width=3, speed=800, damage=20, beam_length=1000,
+                 lifetime=1.5):
         self.width = width
         self.height = height
 
         self.start_x = start_x if start_x is not None else width // 2
         self.start_y = start_y if start_y is not None else height // 2
 
-        # Точка направления (позиция игрока в момент выстрела)
         self.target_x = end_x if end_x is not None else width
         self.target_y = end_y if end_y is not None else height
 
-        self.current_x = self.start_x
-        self.current_y = self.start_y
-
-        # Вектор направления от босса к игроку
         dx = self.target_x - self.start_x
         dy = self.target_y - self.start_y
-        distance = math.sqrt(dx * dx + dy * dy)
+        distance_to_target = math.sqrt(dx * dx + dy * dy)
 
-        if distance > 0:
-            self.direction_x = dx / distance
-            self.direction_y = dy / distance
+        if distance_to_target > 0:
+            self.dir_x = dx / distance_to_target
+            self.dir_y = dy / distance_to_target
         else:
-            self.direction_x = 0
-            self.direction_y = 0
+            self.dir_x = 1
+            self.dir_y = 0
 
         self.color = color
         self.line_width = line_width
-        self.speed = speed
         self.damage = damage
-        self.max_distance = max_distance
-        self.distance_traveled = 0
+        self.speed = speed
+        self.beam_length = beam_length
+        self.lifetime = lifetime
 
+        self.current_length = 0
+        self.end_x = self.start_x
+        self.end_y = self.start_y
+
+        self.age = 0
         self.active = True
-        self.has_hit_player = False  # Флаг попадания в игрока
+        self.has_hit_player = False
+        self.growing = True
 
     def draw(self):
         if self.active:
             arcade.draw_line(self.start_x, self.start_y,
-                             self.current_x, self.current_y,
+                             self.end_x, self.end_y,
                              self.color, self.line_width)
 
     def update(self, delta_time):
         if not self.active:
             return
 
-        # Двигаем луч в направлении игрока
-        move_distance = self.speed * delta_time
-        self.current_x += self.direction_x * move_distance
-        self.current_y += self.direction_y * move_distance
-        self.distance_traveled += move_distance
+        self.age += delta_time
 
-        # Луч активен пока не достиг границы экрана
-        if (self.current_x < 0 or self.current_x > self.width or
-                self.current_y < 0 or self.current_y > self.height):
+        if self.age >= self.lifetime:
             self.active = False
+            return
 
-        if self.distance_traveled >= self.max_distance:
-            self.active = False
+        if self.growing and self.current_length < self.beam_length:
+            growth = self.speed * delta_time
+            new_length = self.current_length + growth
+
+            if new_length >= self.beam_length:
+                new_length = self.beam_length
+                self.growing = False
+
+            self.current_length = new_length
+            self.end_x = self.start_x + self.dir_x * self.current_length
+            self.end_y = self.start_y + self.dir_y * self.current_length
 
     def is_active(self):
         return self.active
@@ -207,41 +207,32 @@ class Atacs:
         self.active = False
 
     def check_player_hit(self, player_x, player_y, player_radius):
-        """Проверка попадания луча в игрока"""
         if self.has_hit_player or not self.active:
             return False
 
-        # Вектор луча
-        line_dx = self.current_x - self.start_x
-        line_dy = self.current_y - self.start_y
+        line_dx = self.end_x - self.start_x
+        line_dy = self.end_y - self.start_y
         line_length = math.sqrt(line_dx * line_dx + line_dy * line_dy)
 
         if line_length == 0:
             return False
 
-        # Нормализованный вектор луча
         line_dir_x = line_dx / line_length
         line_dir_y = line_dy / line_length
 
-        # Вектор от начала луча к игроку
         to_player_x = player_x - self.start_x
         to_player_y = player_y - self.start_y
 
-        # Проекция вектора на луч
         projection = to_player_x * line_dir_x + to_player_y * line_dir_y
 
-        # Если проекция за пределами луча
-        if projection < 0 or projection > line_length:
+        if projection < 0 or projection > self.current_length:
             return False
 
-        # Ближайшая точка на луче к игроку
         closest_x = self.start_x + line_dir_x * projection
         closest_y = self.start_y + line_dir_y * projection
 
-        # Расстояние от игрока до ближайшей точки
         distance = math.sqrt((player_x - closest_x) ** 2 + (player_y - closest_y) ** 2)
 
-        # Если расстояние меньше радиуса игрока + толщины луча
         if distance < player_radius + self.line_width / 2:
             self.has_hit_player = True
             return True
@@ -252,71 +243,60 @@ class Atacs:
 class Game:
     def __init__(self, target_x, target_y):
         self.time = time.time()
-        self.target_x = target_x  # Позиция босса (откуда летят лучи)
+        self.target_x = target_x
         self.target_y = target_y
 
-        self.attacks = []  # Список активных лучей
+        self.attacks = []
         self.shoot_timer = 0
-        self.shoot_interval = 0.1  # Интервал между выстрелами
-        self.shots_fired = 0
-        self.max_shots = 999999999999999999
-        self.is_shooting = False  # Флаг автострельбы
+        self.shoot_interval = 0.3  # 300 мс между выстрелами
+        self.is_shooting = False
 
     def start_shooting(self):
-        """Включить автострельбу"""
-        self.is_shooting = True
-        self.shots_fired = 0
-        self.shoot_timer = 0
+        if not self.is_shooting:
+            self.is_shooting = True
+            self.shoot_timer = 0
 
     def stop_shooting(self):
-        """Выключить автострельбу"""
         self.is_shooting = False
 
     def create_attack(self, start_x, start_y):
-        """Создать луч от босса к игроку"""
         attack = Atacs(
             width=800,
             height=800,
-            start_x=self.target_x,  # От босса
+            start_x=self.target_x,
             start_y=self.target_y,
-            end_x=start_x,  # К игроку (направление)
+            end_x=start_x,
             end_y=start_y,
             color=arcade.color.RED,
-            speed=500,  # Скорость луча
+            speed=800,
             line_width=8,
             damage=20,
-            max_distance=800
+            beam_length=1000,
+            lifetime=1.5
         )
         self.attacks.append(attack)
         return attack
 
     def update(self, delta_time, player_x=None, player_y=None, player_radius=30):
-        """Обновление логики игры"""
-        # Обновляем все лучи
         for attack in self.attacks[:]:
             attack.update(delta_time)
 
-            # Проверяем попадание в игрока
             if player_x is not None and player_y is not None:
                 if attack.check_player_hit(player_x, player_y, player_radius):
                     print("Игрок получил урон!")
-                    # Здесь можно добавить логику урона
 
-            # Удаляем неактивные лучи
             if not attack.is_active():
                 self.attacks.remove(attack)
 
-        # Автострельба
-        if self.is_shooting and self.shots_fired < self.max_shots and player_x is not None:
+        # Автоматическая стрельба
+        if self.is_shooting and player_x is not None:
             self.shoot_timer += delta_time
 
             if self.shoot_timer >= self.shoot_interval:
                 self.shoot_timer = 0
-                self.shots_fired += 1
                 self.create_attack(player_x, player_y)
 
     def draw(self):
-        """Отрисовка всех лучей"""
         for attack in self.attacks:
             attack.draw()
 
