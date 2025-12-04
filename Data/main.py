@@ -10,7 +10,7 @@ class MyGame(arcade.Window):
         super().__init__(width, height, title)
         arcade.set_background_color(arcade.color.PINK)
 
-        self.game = Game(target_x=width // 2, target_y=height // 2)
+        self.game = Level1(target_x=width // 2, target_y=height // 2)
 
         self.player = Units(
             width, height,
@@ -134,7 +134,7 @@ class Units:
 class Atacs:
     def __init__(self, width=800, height=800, start_x=None, start_y=None,
                  end_x=None, end_y=None, color=arcade.color.GOLD,
-                 line_width=3, speed=800, damage=20, beam_length=1000,
+                 line_width=3, speed=800, damage=20,
                  lifetime=1.5):
         self.width = width
         self.height = height
@@ -160,7 +160,6 @@ class Atacs:
         self.line_width = line_width
         self.damage = damage
         self.speed = speed
-        self.beam_length = beam_length
         self.lifetime = lifetime
 
         self.current_length = 0
@@ -170,7 +169,6 @@ class Atacs:
         self.age = 0
         self.active = True
         self.has_hit_player = False
-        self.growing = True
 
     def draw(self):
         if self.active:
@@ -188,17 +186,12 @@ class Atacs:
             self.active = False
             return
 
-        if self.growing and self.current_length < self.beam_length:
-            growth = self.speed * delta_time
-            new_length = self.current_length + growth
+        growth = self.speed * delta_time
+        new_length = self.current_length + growth
 
-            if new_length >= self.beam_length:
-                new_length = self.beam_length
-                self.growing = False
-
-            self.current_length = new_length
-            self.end_x = self.start_x + self.dir_x * self.current_length
-            self.end_y = self.start_y + self.dir_y * self.current_length
+        self.current_length = new_length
+        self.end_x = self.start_x + self.dir_x * self.current_length
+        self.end_y = self.start_y + self.dir_y * self.current_length
 
     def is_active(self):
         return self.active
@@ -240,7 +233,7 @@ class Atacs:
         return False
 
 
-class Game:
+class Level1:
     def __init__(self, target_x, target_y):
         self.time = time.time()
         self.target_x = target_x
@@ -268,10 +261,9 @@ class Game:
             end_x=start_x,
             end_y=start_y,
             color=arcade.color.RED,
-            speed=800,
+            speed=2500,
             line_width=8,
             damage=20,
-            beam_length=1000,
             lifetime=1.5
         )
         self.attacks.append(attack)
